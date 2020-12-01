@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	miniHost             = "https://api.weixin.qq.com"
 	miniURLCodeToSession = "https://api.weixin.qq.com/sns/jscode2session"
 
 	miniSuccessCode = 0
@@ -28,7 +27,7 @@ func NewMiniProgramClient(cli *http.Client, appID, secret string) *miniProgram {
 	}
 }
 
-type codeToSessionReply struct {
+type miniCodeToSession struct {
 	OpenID     string `json:"openid"`
 	SessionKey string `json:"session_key"`
 	UnionID    string `json:"unionid"`
@@ -52,7 +51,7 @@ func (wx *miniProgram) GetSession(code string) (openID, sessionKey string, err e
 	if err != nil {
 		return "", "", err
 	}
-	reply := &codeToSessionReply{}
+	reply := &miniCodeToSession{}
 	if err = json.Unmarshal(body, reply); err != nil {
 		return "", "", err
 	}
@@ -60,4 +59,30 @@ func (wx *miniProgram) GetSession(code string) (openID, sessionKey string, err e
 		return "", "", fmt.Errorf("request we chat service failed, code[%d], message[%s]", reply.ErrCode, reply.ErrMsg)
 	}
 	return reply.OpenID, reply.SessionKey, nil
+}
+
+type MiniUserInfo struct {
+	Nickname string `json:"nickName"`
+	AvatarURL string `json:"avatarUrl"`
+	Gender uint8 `json:"gender"`
+	//Country string `json:"country"`
+	//Province string `json:"province"`
+	//City string `json:"city"`
+	//Language string `json:"language"`
+}
+
+func DecryptMiniUserInfo() (*MiniUserInfo, error) {
+	info := &MiniUserInfo{}
+	return info, nil
+}
+
+type MiniUserPhone struct {
+	PhoneNumber string `json:"phoneNumber"`
+	PurePhoneNumber string `json:"purePhoneNumber"`
+	CountryCode string `json:"countryCode"`
+}
+
+func DecryptMiniPhone() (*MiniUserPhone, error) {
+	phone := &MiniUserPhone{}
+	return phone, nil
 }
