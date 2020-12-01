@@ -71,8 +71,11 @@ type MiniUserInfo struct {
 	//Language string `json:"language"`
 }
 
-func DecryptMiniUserInfo() (*MiniUserInfo, error) {
+func DecryptMiniUserInfo(cipher, iv, key string) (*MiniUserInfo, error) {
 	info := &MiniUserInfo{}
+	if err := decrypt(cipher, iv, key, info); err != nil {
+		return nil, err
+	}
 	return info, nil
 }
 
@@ -82,7 +85,10 @@ type MiniUserPhone struct {
 	CountryCode string `json:"countryCode"`
 }
 
-func DecryptMiniPhone() (*MiniUserPhone, error) {
+func DecryptMiniPhone(cipher, iv, key string) (*MiniUserPhone, error) {
 	phone := &MiniUserPhone{}
+	if err := decrypt(cipher, iv, key, phone); err != nil {
+		return nil, err
+	}
 	return phone, nil
 }
