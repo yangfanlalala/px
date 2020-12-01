@@ -37,10 +37,12 @@ type miniCodeToSession struct {
 
 func (wx *miniProgram) GetSession(code string) (openID, sessionKey string, err error) {
 	fullURL := miniURLCodeToSession + "?js_code=" + code + "&appid=" + wx.appID + "&secret=" + wx.secret + "&grant_type=authorization_code"
-	fmt.Println(fullURL)
 	req, err := http.NewRequest(http.MethodGet, fullURL, nil)
 	if err != nil {
 		return "", "", err
+	}
+	if wx.httpClient == nil {
+		wx.httpClient = &http.Client{Timeout: 2}
 	}
 	resp, err := wx.httpClient.Do(req)
 	if err != nil {
@@ -62,33 +64,41 @@ func (wx *miniProgram) GetSession(code string) (openID, sessionKey string, err e
 }
 
 type MiniUserInfo struct {
-	Nickname string `json:"nickName"`
+	Nickname  string `json:"nickName"`
 	AvatarURL string `json:"avatarUrl"`
-	Gender uint8 `json:"gender"`
+	Gender    uint8  `json:"gender"`
 	//Country string `json:"country"`
 	//Province string `json:"province"`
 	//City string `json:"city"`
 	//Language string `json:"language"`
+	Watermark Watermark `json:"watermark"`
 }
 
-func DecryptMiniUserInfo(cipher, iv, key string) (*MiniUserInfo, error) {
+func (wx *miniProgram) GetUserInfo(cipher, iv, key string) (*MiniUserInfo, error) {
 	info := &MiniUserInfo{}
 	if err := decrypt(cipher, iv, key, info); err != nil {
 		return nil, err
+	}
+	if wx.appID != info.Watermark.AppID {
+		return nil, fmt.Errorf("appid not right")
 	}
 	return info, nil
 }
 
 type MiniUserPhone struct {
-	PhoneNumber string `json:"phoneNumber"`
-	PurePhoneNumber string `json:"purePhoneNumber"`
-	CountryCode string `json:"countryCode"`
+	PhoneNumber     string    `json:"phoneNumber"`
+	PurePhoneNumber string    `json:"purePhoneNumber"`
+	CountryCode     string    `json:"countryCode"`
+	Watermark       Watermark `json:"watermark"`
 }
 
-func DecryptMiniPhone(cipher, iv, key string) (*MiniUserPhone, error) {
+func (wx *miniProgram) GetPhone(cipher, iv, key string) (*MiniUserPhone, error) {
 	phone := &MiniUserPhone{}
 	if err := decrypt(cipher, iv, key, phone); err != nil {
 		return nil, err
+	}
+	if wx.appID != phone.Watermark.AppID {
+		return nil, fmt.Errorf("appid not right")
 	}
 	return phone, nil
 }

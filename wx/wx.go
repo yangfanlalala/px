@@ -6,6 +6,11 @@ import (
 	"github.com/yangfanlalala/px/crypto"
 )
 
+type Watermark struct {
+	AppID     string `json:"appid"`
+	Timestamp int64  `json:"timestamp"`
+}
+
 func decrypt(cipherText, iv, session string, obj interface{}) error {
 	cipherDecode, err := base64.StdEncoding.DecodeString(cipherText)
 	if err != nil {
