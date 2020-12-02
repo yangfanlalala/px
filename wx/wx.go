@@ -24,7 +24,7 @@ func decrypt(cipherText, iv, session string, obj interface{}) error {
 	if err != nil {
 		return err
 	}
-	plainText, err := crypto.AesDecrypt(string(cipherDecode), string(sessionDecode), string(ivDecode))
+	plainText, err := crypto.AesDecrypt(cipherDecode, sessionDecode, ivDecode)
 	if err != nil {
 		return err
 	}
