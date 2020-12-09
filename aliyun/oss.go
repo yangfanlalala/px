@@ -7,13 +7,20 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/yangfanlalala/px/crypto"
 	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+)
+
+const (
+	OssDefaultExpireInSec = 5
 )
 
 type oss struct {
@@ -68,9 +75,18 @@ func (o *oss) PutObject(data io.Reader, obj string) error {
 	return nil
 }
 
-func (o *oss) GetObjectURL() string {
-
-	return ""
+func (o *oss) GetObjectURL(obj string, method string, expireInSec int64) string {
+	if expireInSec <= 0 {
+		expireInSec = OssDefaultExpireInSec
+	}
+	obj = strings.TrimLeft(obj, "/")
+	//过期时间
+	e := time.Now().Unix() + expireInSec
+	es := strconv.FormatInt(e, 10)
+	//签名字符串
+	s := method + "\n\n\n" + es + "\n/" + o.bucket + "/" + obj
+	signed := url.QueryEscape(base64.StdEncoding.EncodeToString(crypto.HmacSha1(s, o.as)))
+	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&Signature=" + signed
 }
 
 func (o *oss) DeleteObject(obj string) error {
