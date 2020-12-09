@@ -1,8 +1,13 @@
 package aliyun
 
 import (
-	"encoding/json"
+	"crypto/hmac"
+	"crypto/sha1"
+	"encoding/base64"
+	"encoding/xml"
 	"errors"
+	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -46,18 +51,20 @@ func (o *oss) PutObject(data io.Reader, obj string) error {
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(body))
 	if resp.StatusCode != http.StatusOK {
-		body, e := ioutil.ReadAll(resp.Body)
+		r := &errResponse{}
+		e := xml.Unmarshal(body, r)
 		if e != nil {
 			return e
 		}
-		r := &errResponse{}
-		e = json.Unmarshal(body, r)
-		if e != nil {
-			return err
-		}
 		return r
 	}
+	fmt.Println("#23", string(body))
 	return nil
 }
 
@@ -79,17 +86,22 @@ func (o *oss) do(method string, obj string, data io.Reader) (*http.Response, err
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("#tu", req.URL)
+	req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
+	fmt.Println("#happp", o.sign(req, obj))
+	req.Header.Set("Authorization", o.sign(req, obj))
 	return o.cli.Do(req)
 }
 
 func (o *oss) sign(req *http.Request, obj string) string {
-	date := time.Now().Format(http.TimeFormat)
-	req.Header.Set("Date", date)
-	s := req.Method + "\n\n\n" + date + o.canonicalize(req.Header) + "/" + o.bucket
+	s := req.Method + "\n\n\n" + req.Header.Get("Date") + "\n" + o.canonicalize(req.Header) + "/" + o.bucket + "/"
 	if obj != "" {
-		s += "/" + obj
+		s += obj
 	}
-	return "OSS" + o.ak
+	fmt.Println("#45", s)
+	h := hmac.New(func() hash.Hash { return sha1.New() }, []byte(o.as))
+	_, _ = io.WriteString(h, s)
+	return "OSS" + o.ak + ":" + base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 func (o *oss) canonicalize(header http.Header) string {
