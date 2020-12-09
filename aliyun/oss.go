@@ -69,10 +69,27 @@ func (o *oss) PutObject(data io.Reader, obj string) error {
 }
 
 func (o *oss) GetObjectURL() string {
+
 	return ""
 }
 
-func (o *oss) DeleteObject() error {
+func (o *oss) DeleteObject(obj string) error {
+	resp, err := o.do(http.MethodDelete, obj, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { resp.Body.Close() }()
+	body, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println(resp.Status, string(body))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		r := &errResponse{}
+		e := xml.Unmarshal(body, r)
+		if e != nil {
+			return e
+		}
+		return r
+	}
+	fmt.Println(string(body))
 	return nil
 }
 
@@ -86,22 +103,21 @@ func (o *oss) do(method string, obj string, data io.Reader) (*http.Response, err
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("#tu", req.URL)
 	req.Header.Set("Date", time.Now().UTC().Format(http.TimeFormat))
-	fmt.Println("#happp", o.sign(req, obj))
 	req.Header.Set("Authorization", o.sign(req, obj))
 	return o.cli.Do(req)
 }
 
 func (o *oss) sign(req *http.Request, obj string) string {
-	s := req.Method + "\n\n\n" + req.Header.Get("Date") + "\n" + o.canonicalize(req.Header) + "/" + o.bucket + "/"
+	md5 := req.Header.Get("Content-Md5")
+	ctype := req.Header.Get("Content-Type")
+	s := req.Method + "\n" + md5 + "\n" + ctype + "\n" + req.Header.Get("Date") + "\n" + o.canonicalize(req.Header) + "/" + o.bucket + "/"
 	if obj != "" {
 		s += obj
 	}
-	fmt.Println("#45", s)
 	h := hmac.New(func() hash.Hash { return sha1.New() }, []byte(o.as))
 	_, _ = io.WriteString(h, s)
-	return "OSS" + o.ak + ":" + base64.StdEncoding.EncodeToString(h.Sum(nil))
+	return "OSS " + o.ak + ":" + base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 func (o *oss) canonicalize(header http.Header) string {
