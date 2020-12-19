@@ -89,21 +89,20 @@ func (o *oss) GetObjectURL(obj string, method string, expireInSec int64) string 
 	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&Signature=" + signed
 }
 
-func (o *oss) GetImageObjectURL(obj string, expireInSec int64, options map[string]string) string {
-	header, values := http.Header{}, url.Values{}
-	for k, v := range options {
-		header.Add(k, v)
-		values.Add(k, v)
-	}
-	query := values.Encode()
-	s := o.canonicalize(header)
+func (o *oss) GetSubResourceURL(obj string, expireInSec int64, options map[string]string) string {
+	query := o.sortQuery(options)
+	//query := values.Encode()
 	if expireInSec <= 0 {
 		expireInSec = OssDefaultExpireInSec
 	}
 	obj = strings.TrimLeft(obj, "/")
 	e := time.Now().Unix() + expireInSec
 	es := strconv.FormatInt(e, 10)
-	s = http.MethodGet + "\n\n\n" + es + "\n/" + s + o.bucket + "/" + obj
+	s := http.MethodGet + "\n\n\n" + es + "\n/" + o.bucket + "/" + obj
+	if query != "" {
+		s = s + "?" + query
+	}
+	fmt.Println("#DEBUG", s)
 	signed := url.QueryEscape(base64.StdEncoding.EncodeToString(crypto.HmacSha1(s, o.as)))
 	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&" + query + "&Signature=" + signed
 }
@@ -176,4 +175,20 @@ func (o *oss) canonicalize(header http.Header) string {
 		result += s + ":" + mmap[s] + "\n"
 	}
 	return result
+}
+
+func (o *oss) sortQuery(options map[string]string) string {
+	if len(options) == 0 {
+		return ""
+	}
+	ks := make([]string, 0, len(options))
+	for k  := range options {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	ss := make([]string, 0, len(ks))
+	for _, s := range ks {
+		ss = append(ss, s + "=" + options[s])
+	}
+	return strings.Join(ss, "&")
 }
