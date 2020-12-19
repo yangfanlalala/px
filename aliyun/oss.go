@@ -90,10 +90,12 @@ func (o *oss) GetObjectURL(obj string, method string, expireInSec int64) string 
 }
 
 func (o *oss) GetImageObjectURL(obj string, expireInSec int64, options map[string]string) string {
-	header := http.Header{}
+	header, values := http.Header{}, url.Values{}
 	for k, v := range options {
 		header.Add(k, v)
+		values.Add(k, v)
 	}
+	query := values.Encode()
 	s := o.canonicalize(header)
 	if expireInSec <= 0 {
 		expireInSec = OssDefaultExpireInSec
@@ -103,7 +105,7 @@ func (o *oss) GetImageObjectURL(obj string, expireInSec int64, options map[strin
 	es := strconv.FormatInt(e, 10)
 	s = http.MethodGet + "\n\n\n" + es + "\n/" + s + o.bucket + "/" + obj
 	signed := url.QueryEscape(base64.StdEncoding.EncodeToString(crypto.HmacSha1(s, o.as)))
-	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&Signature=" + signed
+	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&" + query + "&Signature=" + signed
 }
 
 func (o *oss) DeleteObject(obj string) error {
