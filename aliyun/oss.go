@@ -89,6 +89,23 @@ func (o *oss) GetObjectURL(obj string, method string, expireInSec int64) string 
 	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&Signature=" + signed
 }
 
+func (o *oss) GetImageObjectURL(obj string, expireInSec int64, options map[string]string) string {
+	header := http.Header{}
+	for k, v := range options {
+		header.Add(k, v)
+	}
+	s := o.canonicalize(header)
+	if expireInSec <= 0 {
+		expireInSec = OssDefaultExpireInSec
+	}
+	obj = strings.TrimLeft(obj, "/")
+	e := time.Now().Unix() + expireInSec
+	es := strconv.FormatInt(e, 10)
+	s = http.MethodGet + "\n\n\n" + es + "\n/" + s + o.bucket + "/" + obj
+	signed := url.QueryEscape(base64.StdEncoding.EncodeToString(crypto.HmacSha1(s, o.as)))
+	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&Signature=" + signed
+}
+
 func (o *oss) DeleteObject(obj string) error {
 	resp, err := o.do(http.MethodDelete, obj, nil)
 	if err != nil {
@@ -96,7 +113,6 @@ func (o *oss) DeleteObject(obj string) error {
 	}
 	defer func() { resp.Body.Close() }()
 	body, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println(resp.Status, string(body))
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
 		r := &errResponse{}
 		e := xml.Unmarshal(body, r)
@@ -105,7 +121,6 @@ func (o *oss) DeleteObject(obj string) error {
 		}
 		return r
 	}
-	fmt.Println(string(body))
 	return nil
 }
 
