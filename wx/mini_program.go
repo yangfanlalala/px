@@ -7,19 +7,19 @@ import (
 )
 
 const (
-	WeChatURLWxACode = "https://api.weixin.qq.com/wxa/getwxacode?access_token=ACCESS_TOKEN"
+	WeChatURLWxACode        = "https://api.weixin.qq.com/wxa/getwxacode?access_token=ACCESS_TOKEN"
 	WeChatURLWxACodeUnlimit = "https://api.weixin.qq.com/wxa/getwxacodeunlimit?access_token=ACCESS_TOKEN"
 )
 
 type accessToken struct {
-	token string
+	token   string
 	expired int64
 }
 
 type MiniProgram struct {
-	appID string
-	appSecret string
-	token accessToken
+	appID      string
+	appSecret  string
+	token      accessToken
 	httpClient *http.Client
 }
 
@@ -27,10 +27,9 @@ func (wx *MiniProgram) GetAccessToken() (string, error) {
 	return "", nil
 }
 
-
-func (wx *MiniProgram) GetWxACode(path string, width uint32) (error) {
+func (wx *MiniProgram) GetWxACode(path string, width uint32) error {
 	type s struct {
-		Path string `json:"path"`
+		Path  string `json:"path"`
 		Width uint32 `json:"width"`
 	}
 	params := &s{Path: path, Width: width}
@@ -43,9 +42,8 @@ func (wx *MiniProgram) GetWxACode(path string, width uint32) (error) {
 	if err != nil {
 		return err
 	}
-	defer func() {_ = res.Body.Close()}()
+	defer func() { _ = res.Body.Close() }()
 	type r struct {
-
 	}
 	return nil
 }
@@ -54,9 +52,9 @@ func (wx *MiniProgram) GetWxACode(path string, width uint32) (error) {
 func (wx *MiniProgram) GetWxACodeUnlimit(scene, page string, width uint32) {
 	params := struct {
 		Scene string `json:"scene"`
-		Page string `json:"page"`
+		Page  string `json:"page"`
 		Width uint32 `json:"width"`
-	} {Scene: scene, Page: page, Width: width}
+	}{Scene: scene, Page: page, Width: width}
 	content, _ := json.Marshal(params)
 	req, err := http.NewRequest(http.MethodPost, WeChatURLWxACodeUnlimit, bytes.NewReader(content))
 	if err != nil {
@@ -66,9 +64,9 @@ func (wx *MiniProgram) GetWxACodeUnlimit(scene, page string, width uint32) {
 	if err != nil {
 		return
 	}
-	defer func() {_ := res.Body.Close()}()
+	defer func() { _ = res.Body.Close() }()
 }
 
 func (wx *MiniProgram) SendSubscribeMessage() error {
-
+	return nil
 }
