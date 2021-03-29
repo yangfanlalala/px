@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	WeChatURLToken = "https://api.weixin.qq.com/cgi-bin/token"
-	WeChatURLWxACode        = "https://api.weixin.qq.com/wxa/getwxacode"
-	WeChatURLWxACodeUnlimit = "https://api.weixin.qq.com/wxa/getwxacodeunlimit"
+	WeChatURLToken                  = "https://api.weixin.qq.com/cgi-bin/token"
+	WeChatURLWxACode                = "https://api.weixin.qq.com/wxa/getwxacode"
+	WeChatURLWxACodeUnlimited       = "https://api.weixin.qq.com/wxa/getwxacodeunlimit"
+	WeChatURLWxSubscribeMessageSend = "https://api.weixin.qq.com/cgi-bin/message/subscribe/send"
 )
 
 type accessToken struct {
@@ -26,8 +27,8 @@ type accessToken struct {
 
 type lck struct {
 	locked bool
-	lck1 sync.Mutex
-	lck2 sync.Mutex
+	lck1   sync.Mutex
+	lck2   sync.Mutex
 }
 
 func (l *lck) lock() bool {
@@ -54,10 +55,10 @@ type MiniProgram struct {
 	appSecret  string
 	token      accessToken
 	httpClient *http.Client
-	lock  lck
+	lock       lck
 }
 
-func NewMiniProgram (appID, appSecret string, cli *http.Client) *MiniProgram {
+func NewMiniProgram(appID, appSecret string, cli *http.Client) *MiniProgram {
 	return &MiniProgram{
 		appID:      appID,
 		appSecret:  appSecret,
@@ -80,7 +81,7 @@ func (wx *MiniProgram) GetAccessToken() (string, error) {
 	val.Set("grant_type", "client_credential")
 	val.Set("appid", wx.appID)
 	val.Set("secret", wx.appSecret)
-	req, err := http.NewRequest(http.MethodGet, WeChatURLToken + "?" + val.Encode(), nil)
+	req, err := http.NewRequest(http.MethodGet, WeChatURLToken+"?"+val.Encode(), nil)
 	if err != nil {
 		return "", err
 	}
@@ -88,15 +89,15 @@ func (wx *MiniProgram) GetAccessToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer func() {_ = res.Body.Close()}()
+	defer func() { _ = res.Body.Close() }()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		return "", nil
 	}
 	r := &struct {
-		AccessToken string `json:"access_token"`
-		ExpiresIn int64 `json:"expires_in"`
-		ErrorCode int64 `json:"errcode"`
+		AccessToken  string `json:"access_token"`
+		ExpiresIn    int64  `json:"expires_in"`
+		ErrorCode    int64  `json:"errcode"`
 		ErrorMessage string `json:"errmsg"`
 	}{}
 	if err = json.Unmarshal(body, r); err != nil {
@@ -134,18 +135,14 @@ func (wx *MiniProgram) GetWxACode(path string, width uint32) error {
 }
 
 //https://developers.weixin.qq.com/miniprogram/dev/api-backend/open-api/qr-code/wxacode.getUnlimited.html
-func (wx *MiniProgram) GetWxACodeUnlimit(scene, page string, width uint32) (io.Closer, error) {
+func (wx *MiniProgram) GetWxACodeUnlimited(ac string, scene, page string, width uint32) (io.Closer, error) {
 	params := struct {
 		Scene string `json:"scene"`
 		Page  string `json:"page"`
 		Width uint32 `json:"width"`
 	}{Scene: scene, Page: page, Width: width}
 	content, _ := json.Marshal(params)
-	ac, err := wx.GetAccessToken()
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(http.MethodPost, WeChatURLWxACodeUnlimit + "?access_token=" + ac, bytes.NewReader(content))
+	req, err := http.NewRequest(http.MethodPost, WeChatURLWxACodeUnlimited+"?access_token="+ac, bytes.NewReader(content))
 	if err != nil {
 		return nil, err
 	}
@@ -155,12 +152,12 @@ func (wx *MiniProgram) GetWxACodeUnlimit(scene, page string, width uint32) (io.C
 	}
 	defer func() { _ = res.Body.Close() }()
 	contentType := res.Header.Get("Content-Type")
-	if strings.HasPrefix( contentType, "image") {
+	if strings.HasPrefix(contentType, "image") {
 		return res.Body, nil
 	}
 	body, err := ioutil.ReadAll(res.Body)
 	r := &struct {
-		ErrorCode int32 `json:"errcode"`
+		ErrorCode    int32  `json:"errcode"`
 		ErrorMessage string `json:"errmsg"`
 	}{}
 	err = json.Unmarshal(body, r)
@@ -170,6 +167,45 @@ func (wx *MiniProgram) GetWxACodeUnlimit(scene, page string, width uint32) (io.C
 	return nil, fmt.Errorf("request weixin service failed code[%d] message[%s]", r.ErrorCode, r.ErrorMessage)
 }
 
-func (wx *MiniProgram) SendSubscribeMessage() error {
+const (
+	MiniProgramStateDeveloper = "developer"
+	MiniProgramStateTrial     = "trial"
+	MiniProgramStateFormal    = "formal"
+)
+
+type TemplateMessage struct {
+	TemplateID string      `json:"template_id"`
+	Page       string      `json:"page"`
+	Data       interface{} `json:"data"`
+	State      string      `json:"miniprogram_state"`
+}
+
+func (wx *MiniProgram) SendSubscribeMessage(ac string, msg TemplateMessage) error {
+	content, _ := json.Marshal(msg)
+	request, err := http.NewRequest(http.MethodPost, WeChatURLWxSubscribeMessageSend+"?access_token="+ac, bytes.NewReader(content))
+	if err != nil {
+		return err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	res, err := wx.httpClient.Do(request)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = res.Body.Close() }()
+	body, _ := ioutil.ReadAll(res.Body)
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("http request failed, code[%d], msg[%s]", res.StatusCode, body)
+	}
+	result := &struct {
+		ErrorCode    int32  `json:"errCode"`
+		ErrorMessage string `json:"errMsg"`
+	}{}
+	err = json.Unmarshal(body, result)
+	if err != nil {
+		return err
+	}
+	if result.ErrorCode != 0 {
+		return fmt.Errorf("wx service return error, error code[%d], error message[%s]", result.ErrorCode, result.ErrorMessage)
+	}
 	return nil
 }
