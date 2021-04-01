@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 const (
@@ -54,7 +53,6 @@ func (wx *MiniProgramClient) GetAccessToken() (*AccessToken, error) {
 	if wx.httpClient == nil {
 		return nil, HttpClientIsNil
 	}
-	now := time.Now().Unix()
 	val := &url.Values{}
 	val.Set("grant_type", "client_credential")
 	val.Set("appid", wx.AppID)
@@ -86,7 +84,7 @@ func (wx *MiniProgramClient) GetAccessToken() (*AccessToken, error) {
 	}
 	return &AccessToken{
 		Token:   r.AccessToken,
-		Expired: now + r.ExpiresIn - 1200,
+		Expired: r.ExpiresIn,
 	}, nil
 }
 
