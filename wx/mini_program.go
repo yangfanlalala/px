@@ -3,96 +3,74 @@ package wx
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 	"time"
 )
 
 const (
-	WeChatURLToken                  = "https://api.weixin.qq.com/cgi-bin/token"
-	WeChatURLWxACode                = "https://api.weixin.qq.com/wxa/getwxacode"
-	WeChatURLWxACodeUnlimited       = "https://api.weixin.qq.com/wxa/getwxacodeunlimit"
-	WeChatURLWxSubscribeMessageSend = "https://api.weixin.qq.com/cgi-bin/message/subscribe/send"
+	WeChatURLToken                = "https://api.weixin.qq.com/cgi-bin/token"
+	WeChatURLACodeUnlimited       = "https://api.weixin.qq.com/wxa/getwxacodeunlimit"
+	WeChatURLSubscribeMessageSend = "https://api.weixin.qq.com/cgi-bin/message/subscribe/send"
+	WeChatURLCodeToSession        = "https://api.weixin.qq.com/sns/jscode2session"
+
+	WeChatSuccessCode = 0
+
+	MiniProgramStateDeveloper = "developer"
+	MiniProgramStateTrial     = "trial"
+	MiniProgramStateFormal    = "formal"
 )
 
-type accessToken struct {
-	token   string
-	expired int64
+var (
+	HttpClientIsNil = errors.New("http client is nil")
+)
+
+type AccessToken struct {
+	Token   string
+	Expired int64
 }
 
-type lck struct {
-	locked bool
-	lck1   sync.Mutex
-	lck2   sync.Mutex
-}
-
-func (l *lck) lock() bool {
-	l.lck1.Lock()
-	defer l.lck1.Unlock()
-	if l.locked == false {
-		l.locked = true
-		l.lck2.Lock()
-		return true
-	}
-	return false
-}
-
-func (l *lck) unlock() {
-	l.lck1.Lock()
-	defer l.lck1.Unlock()
-	l.locked = false
-	l.lck2.Unlock()
-	return
-}
-
-type MiniProgram struct {
-	appID      string
-	appSecret  string
-	token      accessToken
+type MiniProgramClient struct {
+	AppID      string
+	AppSecret  string
 	httpClient *http.Client
-	lock       lck
 }
 
-func NewMiniProgram(appID, appSecret string, cli *http.Client) *MiniProgram {
-	return &MiniProgram{
-		appID:      appID,
-		appSecret:  appSecret,
+func NewMiniProgramClient(ak, as string, cli *http.Client) *MiniProgramClient {
+	return &MiniProgramClient{
+		AppID:      ak,
+		AppSecret:  as,
 		httpClient: cli,
 	}
 }
 
-func (wx *MiniProgram) GetAccessToken() (string, error) {
+//获取服务器访问令牌
+func (wx *MiniProgramClient) GetAccessToken() (*AccessToken, error) {
+	if wx.httpClient == nil {
+		return nil, HttpClientIsNil
+	}
 	now := time.Now().Unix()
-	//没问题，就直接返回
-	if wx.token.expired > now {
-		return wx.token.token, nil
-	}
-	if !wx.lock.lock() {
-		time.Sleep(50 * time.Millisecond)
-		return wx.GetAccessToken()
-	}
-	defer wx.lock.unlock()
 	val := &url.Values{}
 	val.Set("grant_type", "client_credential")
-	val.Set("appid", wx.appID)
-	val.Set("secret", wx.appSecret)
+	val.Set("appid", wx.AppID)
+	val.Set("secret", wx.AppSecret)
 	req, err := http.NewRequest(http.MethodGet, WeChatURLToken+"?"+val.Encode(), nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	res, err := wx.httpClient.Do(req)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer func() { _ = res.Body.Close() }()
 	body, err := ioutil.ReadAll(res.Body)
 	if err != nil {
-		return "", nil
+		return nil, err
 	}
 	r := &struct {
 		AccessToken  string `json:"access_token"`
@@ -101,48 +79,30 @@ func (wx *MiniProgram) GetAccessToken() (string, error) {
 		ErrorMessage string `json:"errmsg"`
 	}{}
 	if err = json.Unmarshal(body, r); err != nil {
-		return "", nil
+		return nil, err
 	}
 	if r.ErrorCode != 0 {
-		return "", fmt.Errorf("request weixin service failed code[%d] messge[%s]", r.ErrorCode, r.ErrorMessage)
+		return nil, fmt.Errorf("request weixin service failed code[%d] messge[%s]", r.ErrorCode, r.ErrorMessage)
 	}
-	wx.token = accessToken{
-		token:   r.AccessToken,
-		expired: now + r.ExpiresIn - 1200,
-	}
-	return r.AccessToken, nil
+	return &AccessToken{
+		Token:   r.AccessToken,
+		Expired: now + r.ExpiresIn - 1200,
+	}, nil
 }
 
-func (wx *MiniProgram) GetWxACode(path string, width uint32) error {
-	type s struct {
-		Path  string `json:"path"`
-		Width uint32 `json:"width"`
-	}
-	params := &s{Path: path, Width: width}
-	content, _ := json.Marshal(params)
-	req, err := http.NewRequest("POST", WeChatURLWxACode, bytes.NewReader(content))
-	if err != nil {
-		return err
-	}
-	res, err := wx.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = res.Body.Close() }()
-	type r struct {
-	}
-	return nil
-}
-
+//获取小程序码
 //https://developers.weixin.qq.com/miniprogram/dev/api-backend/open-api/qr-code/wxacode.getUnlimited.html
-func (wx *MiniProgram) GetWxACodeUnlimited(ac string, scene, page string, width uint32) (io.Closer, error) {
+func (wx *MiniProgramClient) GetWxACodeUnlimited(ac string, scene, page string, width uint32) (io.Closer, error) {
+	if wx.httpClient == nil {
+		return nil, HttpClientIsNil
+	}
 	params := struct {
 		Scene string `json:"scene"`
 		Page  string `json:"page"`
 		Width uint32 `json:"width"`
 	}{Scene: scene, Page: page, Width: width}
 	content, _ := json.Marshal(params)
-	req, err := http.NewRequest(http.MethodPost, WeChatURLWxACodeUnlimited+"?access_token="+ac, bytes.NewReader(content))
+	req, err := http.NewRequest(http.MethodPost, WeChatURLACodeUnlimited+"?access_token="+ac, bytes.NewReader(content))
 	if err != nil {
 		return nil, err
 	}
@@ -167,12 +127,6 @@ func (wx *MiniProgram) GetWxACodeUnlimited(ac string, scene, page string, width 
 	return nil, fmt.Errorf("request weixin service failed code[%d] message[%s]", r.ErrorCode, r.ErrorMessage)
 }
 
-const (
-	MiniProgramStateDeveloper = "developer"
-	MiniProgramStateTrial     = "trial"
-	MiniProgramStateFormal    = "formal"
-)
-
 type TemplateMessage struct {
 	TemplateID string      `json:"template_id"`
 	Page       string      `json:"page"`
@@ -180,9 +134,13 @@ type TemplateMessage struct {
 	State      string      `json:"miniprogram_state"`
 }
 
-func (wx *MiniProgram) SendSubscribeMessage(ac string, msg TemplateMessage) error {
+//发送订阅消息
+func (wx *MiniProgramClient) SendSubscribeMessage(ac string, msg TemplateMessage) error {
+	if wx.httpClient == nil {
+		return HttpClientIsNil
+	}
 	content, _ := json.Marshal(msg)
-	request, err := http.NewRequest(http.MethodPost, WeChatURLWxSubscribeMessageSend+"?access_token="+ac, bytes.NewReader(content))
+	request, err := http.NewRequest(http.MethodPost, WeChatURLSubscribeMessageSend+"?access_token="+ac, bytes.NewReader(content))
 	if err != nil {
 		return err
 	}
@@ -208,4 +166,88 @@ func (wx *MiniProgram) SendSubscribeMessage(ac string, msg TemplateMessage) erro
 		return fmt.Errorf("wx service return error, error code[%d], error message[%s]", result.ErrorCode, result.ErrorMessage)
 	}
 	return nil
+}
+
+type MiniProgramSession struct {
+	OpenID     string
+	SessionKey string
+}
+
+//获取Session
+func (wx *MiniProgramClient) GetSession(code string) (*MiniProgramSession, error) {
+	if wx.httpClient == nil {
+		return nil, HttpClientIsNil
+	}
+	url := WeChatURLCodeToSession + "?js_code=" + code + "&appid=" + wx.AppID + "&secret=" + wx.AppSecret + "&grant_type=authorization_code"
+	request, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	response, err := wx.httpClient.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("request wx service failed, status code[%d], body[%d]", response.StatusCode, body)
+	}
+	reply := &struct {
+		OpenID     string `json:"openid"`
+		SessionKey string `json:"session_key"`
+		ErrCode    int64  `json:"errcode"`
+		ErrMsg     string `json:"errmsg"`
+	}{}
+	if err = json.Unmarshal(body, reply); err != nil {
+		return nil, err
+	}
+	if reply.ErrCode != WeChatSuccessCode {
+		return nil, fmt.Errorf("request wx service failed, error code[%d], error message[%s]", reply.ErrCode, reply.ErrMsg)
+	}
+	return &MiniProgramSession{OpenID: reply.OpenID, SessionKey: reply.SessionKey}, nil
+}
+
+type MiniUserInformation struct {
+	Nickname  string    `json:"nickName"`
+	AvatarURL string    `json:"avatarUrl"`
+	Gender    uint8     `json:"gender"`
+	Country   string    `json:"country"`
+	Province  string    `json:"province"`
+	City      string    `json:"city"`
+	Language  string    `json:"language"`
+	Watermark Watermark `json:"watermark"`
+}
+
+//解析用户信息
+func (wx *MiniProgramClient) GetUserInformation(cipher, iv, key string) (*MiniUserInformation, error) {
+	info := &MiniUserInformation{}
+	if err := decrypt(cipher, iv, key, info); err != nil {
+		return nil, err
+	}
+	if wx.AppID != info.Watermark.AppID {
+		return nil, fmt.Errorf("appid not right")
+	}
+	return info, nil
+}
+
+type MiniUserPhoneInformation struct {
+	PhoneNumber     string    `json:"phoneNumber"`
+	PurePhoneNumber string    `json:"purePhoneNumber"`
+	CountryCode     string    `json:"countryCode"`
+	Watermark       Watermark `json:"watermark"`
+}
+
+//解析手机号码
+func (wx *MiniProgramClient) GetPhoneNumber(cipher, iv, key string) (*MiniUserPhoneInformation, error) {
+	phone := &MiniUserPhoneInformation{}
+	if err := decrypt(cipher, iv, key, phone); err != nil {
+		return nil, err
+	}
+	if wx.AppID != phone.Watermark.AppID {
+		return nil, fmt.Errorf("appid not right")
+	}
+	return phone, nil
 }
