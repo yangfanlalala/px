@@ -108,12 +108,12 @@ func (wx *MiniProgramClient) GetWxACodeUnlimited(ac string, scene, page string, 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = res.Body.Close() }()
 	contentType := res.Header.Get("Content-Type")
 	if strings.HasPrefix(contentType, "image") {
 		return res.Body, nil
 	}
 	body, err := ioutil.ReadAll(res.Body)
+	_ = res.Body.Close()
 	r := &struct {
 		ErrorCode    int32  `json:"errcode"`
 		ErrorMessage string `json:"errmsg"`
