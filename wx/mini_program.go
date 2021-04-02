@@ -90,7 +90,7 @@ func (wx *MiniProgramClient) GetAccessToken() (*AccessToken, error) {
 
 //获取小程序码
 //https://developers.weixin.qq.com/miniprogram/dev/api-backend/open-api/qr-code/wxacode.getUnlimited.html
-func (wx *MiniProgramClient) GetWxACodeUnlimited(ac string, scene, page string, width uint32) (io.Closer, error) {
+func (wx *MiniProgramClient) GetWxACodeUnlimited(ac string, scene, page string, width uint32) (io.ReadCloser, error) {
 	if wx.httpClient == nil {
 		return nil, HttpClientIsNil
 	}
