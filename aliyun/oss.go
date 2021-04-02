@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"github.com/yangfanlalala/px/crypto"
 	"hash"
 	"io"
@@ -62,7 +61,6 @@ func (o *oss) PutObject(data io.Reader, obj string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(string(body))
 	if resp.StatusCode != http.StatusOK {
 		r := &errResponse{}
 		e := xml.Unmarshal(body, r)
@@ -71,7 +69,6 @@ func (o *oss) PutObject(data io.Reader, obj string) error {
 		}
 		return r
 	}
-	fmt.Println("#23", string(body))
 	return nil
 }
 
@@ -102,7 +99,6 @@ func (o *oss) GetSubResourceURL(obj string, expireInSec int64, options map[strin
 	if query != "" {
 		s = s + "?" + query
 	}
-	fmt.Println("#DEBUG", s)
 	signed := url.QueryEscape(base64.StdEncoding.EncodeToString(crypto.HmacSha1(s, o.as)))
 	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&" + query + "&Signature=" + signed
 }
@@ -182,13 +178,13 @@ func (o *oss) sortQuery(options map[string]string) string {
 		return ""
 	}
 	ks := make([]string, 0, len(options))
-	for k  := range options {
+	for k := range options {
 		ks = append(ks, k)
 	}
 	sort.Strings(ks)
 	ss := make([]string, 0, len(ks))
 	for _, s := range ks {
-		ss = append(ss, s + "=" + options[s])
+		ss = append(ss, s+"="+options[s])
 	}
 	return strings.Join(ss, "&")
 }
