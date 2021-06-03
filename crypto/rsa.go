@@ -8,7 +8,8 @@ import (
 	"encoding/pem"
 	"errors"
 )
-func RSAPKCS1Encrypt(plain, pk string) (string, error){
+
+func RSAPKCS1Encrypt(plain, pk string) (string, error) {
 	block, _ := pem.Decode([]byte(pk))
 	if block == nil {
 		return "", errors.New("block is empty")
@@ -24,7 +25,7 @@ func RSAPKCS1Encrypt(plain, pk string) (string, error){
 	return base64.StdEncoding.EncodeToString(rst), nil
 }
 
-func RSAPKCS1Decrypt(cipher, pk string) ([]byte, error){
+func RSAPKCS1Decrypt(cipher, pk string) ([]byte, error) {
 	block, _ := pem.Decode([]byte(pk))
 	if block == nil {
 		return nil, errors.New("block is empty")
@@ -41,6 +42,21 @@ func RSAPKCS1Decrypt(cipher, pk string) ([]byte, error){
 	return rst, nil
 }
 
+func RSAPKCS8Encrypt(plain, pk string) (string, error) {
+	block, _ := pem.Decode([]byte(pk))
+	if block == nil {
+		return "", errors.New("block is empty")
+	}
+	x, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return "", err
+	}
+	rst, err := rsa.EncryptPKCS1v15(rand.Reader, x.(*rsa.PublicKey), []byte(plain))
+	if err != nil {
+		return "", err
+	}
+	return base64.StdEncoding.EncodeToString(rst), nil
+}
 
 func RSAPKCS8Decrypt(cipher, pk string) ([]byte, error) {
 	block, _ := pem.Decode([]byte(pk))
