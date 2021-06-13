@@ -22,7 +22,7 @@ const (
 	OssDefaultExpireInSec = 5
 )
 
-type oss struct {
+type Oss struct {
 	ak       string
 	as       string
 	bucket   string
@@ -38,11 +38,11 @@ type errResponse struct {
 }
 
 func (e errResponse) Error() string {
-	return "oss request error code[" + e.Code + "], message[" + e.Message + "], request_id[" + e.RequestID + "], host_id[" + e.HostID + "]"
+	return "Oss request error code[" + e.Code + "], message[" + e.Message + "], request_id[" + e.RequestID + "], host_id[" + e.HostID + "]"
 }
 
-func NewOss(ak, as, bucket, endpoint string, cli *http.Client) *oss {
-	return &oss{
+func NewOss(ak, as, bucket, endpoint string, cli *http.Client) *Oss {
+	return &Oss{
 		ak:       ak,
 		as:       as,
 		bucket:   bucket,
@@ -51,7 +51,7 @@ func NewOss(ak, as, bucket, endpoint string, cli *http.Client) *oss {
 	}
 }
 
-func (o *oss) PutObject(data io.Reader, obj string) error {
+func (o *Oss) PutObject(data io.Reader, obj string) error {
 	resp, err := o.do(http.MethodPut, obj, data)
 	if err != nil {
 		return err
@@ -72,7 +72,7 @@ func (o *oss) PutObject(data io.Reader, obj string) error {
 	return nil
 }
 
-func (o *oss) GetObjectURL(obj string, method string, expireInSec int64) string {
+func (o *Oss) GetObjectURL(obj string, method string, expireInSec int64) string {
 	if expireInSec <= 0 {
 		expireInSec = OssDefaultExpireInSec
 	}
@@ -86,7 +86,7 @@ func (o *oss) GetObjectURL(obj string, method string, expireInSec int64) string 
 	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&Signature=" + signed
 }
 
-func (o *oss) GetSubResourceURL(obj string, expireInSec int64, options map[string]string) string {
+func (o *Oss) GetSubResourceURL(obj string, expireInSec int64, options map[string]string) string {
 	query := o.sortQuery(options)
 	//query := values.Encode()
 	if expireInSec <= 0 {
@@ -103,7 +103,7 @@ func (o *oss) GetSubResourceURL(obj string, expireInSec int64, options map[strin
 	return "https://" + o.bucket + "." + o.endpoint + "/" + obj + "?Expires=" + es + "&OSSAccessKeyId=" + o.ak + "&" + query + "&Signature=" + signed
 }
 
-func (o *oss) DeleteObject(obj string) error {
+func (o *Oss) DeleteObject(obj string) error {
 	resp, err := o.do(http.MethodDelete, obj, nil)
 	if err != nil {
 		return err
@@ -121,7 +121,7 @@ func (o *oss) DeleteObject(obj string) error {
 	return nil
 }
 
-func (o *oss) do(method string, obj string, data io.Reader) (*http.Response, error) {
+func (o *Oss) do(method string, obj string, data io.Reader) (*http.Response, error) {
 	if o.cli == nil {
 		return nil, errors.New("no http client provided")
 	}
@@ -136,7 +136,7 @@ func (o *oss) do(method string, obj string, data io.Reader) (*http.Response, err
 	return o.cli.Do(req)
 }
 
-func (o *oss) sign(req *http.Request, obj string) string {
+func (o *Oss) sign(req *http.Request, obj string) string {
 	md5 := req.Header.Get("Content-Md5")
 	ctype := req.Header.Get("Content-Type")
 	s := req.Method + "\n" + md5 + "\n" + ctype + "\n" + req.Header.Get("Date") + "\n" + o.canonicalize(req.Header) + "/" + o.bucket + "/"
@@ -148,12 +148,12 @@ func (o *oss) sign(req *http.Request, obj string) string {
 	return "OSS " + o.ak + ":" + base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
-func (o *oss) canonicalize(header http.Header) string {
+func (o *Oss) canonicalize(header http.Header) string {
 	mmap := make(map[string]string)
 	kslice := make([]string, 0, len(header))
 	for k, v := range header {
 		lk := strings.TrimSpace(strings.ToLower(k))
-		if strings.HasPrefix(lk, "x-oss-") {
+		if strings.HasPrefix(lk, "x-Oss-") {
 			kslice = append(kslice, lk)
 			if len(v) == 0 {
 				mmap[lk] = ""
@@ -173,7 +173,7 @@ func (o *oss) canonicalize(header http.Header) string {
 	return result
 }
 
-func (o *oss) sortQuery(options map[string]string) string {
+func (o *Oss) sortQuery(options map[string]string) string {
 	if len(options) == 0 {
 		return ""
 	}
